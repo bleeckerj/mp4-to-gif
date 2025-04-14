@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "MP4 to GIF Converter",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/video-to-gif.py",
+            "args": [
+                "/Users/julian/Dropbox (Personal)/Projects By Year/@2025/Oraculator/Ghostwriter Selectric/Vibewriter_041425.mp4",
+                "--output", "${workspaceFolder}/output.gif",
+                "--start", "0",
+                "--resize", "0.75",
+                "--fps", "15"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+        },
+        {
+            "name": "MP4 to GIF (No Args)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/video-to-gif.py",
+            "args": [
+                "${workspaceFolder}/sample.mp4"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+        }
+    ]
+}
