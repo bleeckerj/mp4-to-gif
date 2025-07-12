@@ -11,7 +11,7 @@
                 "--output", "${workspaceFolder}/output.gif",
                 "--start", "0",
                 "--resize", "0.75",
-                "--fps", "15"
+                "--fps", "5"
             ],
             "console": "integratedTerminal",
             "justMyCode": true,
