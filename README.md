@@ -1,7 +1,7 @@
 # MP4 to GIF Converter
 
 A simple Python script to convert MP4 video files to animated GIFs using FFmpeg.
-Supports trimming, resizing, and frame rate adjustment.
+Supports trimming, resizing, frame rate adjustment, and aspect ratio cropping.
 
 ## Requirements
 
@@ -32,7 +32,7 @@ Supports trimming, resizing, and frame rate adjustment.
 ## Usage
 
 ```bash
-python video-to-gif.py INPUT_FILE [--output OUTPUT_FILE] [--start START] [--end END] [--resize RESIZE] [--fps FPS]
+python video-to-gif.py INPUT_FILE [--output OUTPUT_FILE] [--start START] [--end END] [--resize RESIZE] [--fps FPS] [--aspect ASPECT]
 ```
 
 ### Arguments
@@ -41,7 +41,7 @@ python video-to-gif.py INPUT_FILE [--output OUTPUT_FILE] [--start START] [--end 
   Path to the input MP4 file.
 
 - `--output OUTPUT_FILE`  
-  Path to the output GIF file. Defaults to the same name as the input with `.gif` extension.
+  Path to the output GIF file. Defaults to the same name as the input with `.gif` extension (plus parameter info).
 
 - `--start START`  
   Start time in seconds (float). Optional.
@@ -55,13 +55,26 @@ python video-to-gif.py INPUT_FILE [--output OUTPUT_FILE] [--start START] [--end 
 - `--fps FPS`  
   Frames per second for the GIF. Default: `10`.
 
+- `--aspect ASPECT`  
+  Target aspect ratio for the output GIF (e.g., `1:1`, `16:9`, `4:3`). The video will be center-cropped to this aspect ratio before resizing. Optional.
+
 ### Example
 
-Convert the first 5 seconds of a video to a half-size GIF at 15 fps:
+Convert the first 5 seconds of a video to a half-size, 16:9 GIF at 15 fps:
 
 ```bash
-python video-to-gif.py "/Users/julian/Movies/My Video.mp4" --output "output.gif" --start 0 --end 5 --resize 0.5 --fps 15
+python video-to-gif.py "/Users/julian/Movies/My Video.mp4" --output "output.gif" --start 0 --end 5 --resize 0.5 --fps 15 --aspect 16:9
 ```
+
+## Video Aspect Ratio Handling
+
+This script can handle videos with unusual aspect ratio metadata:
+
+- **Videos that appear square but have rectangular dimensions**: The script detects when a video has a display aspect ratio (DAR) of 1:1 but the actual pixel dimensions are rectangular. In these cases, the script will automatically produce a square GIF that matches what you see in video players.
+
+- **Pixel aspect ratio (PAR) correction**: Videos with non-square pixels are correctly handled to ensure the output GIF maintains the same visual appearance as the original video.
+
+- **Forcing a specific aspect ratio**: Using the `--aspect` parameter allows you to create GIFs with specific aspect ratios like square (1:1) or widescreen (16:9), regardless of the source video's dimensions.
 
 ## Notes
 
