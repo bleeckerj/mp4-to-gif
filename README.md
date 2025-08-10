@@ -66,6 +66,16 @@ Convert the first 5 seconds of a video to a half-size, 16:9 GIF at 15 fps:
 python video-to-gif.py "/Users/julian/Movies/My Video.mp4" --output "output.gif" --start 0 --end 5 --resize 0.5 --fps 15 --aspect 16:9
 ```
 
+## Video Aspect Ratio Handling
+
+This script can handle videos with unusual aspect ratio metadata:
+
+- **Videos that appear square but have rectangular dimensions**: The script detects when a video has a display aspect ratio (DAR) of 1:1 but the actual pixel dimensions are rectangular. In these cases, the script will automatically produce a square GIF that matches what you see in video players.
+
+- **Pixel aspect ratio (PAR) correction**: Videos with non-square pixels are correctly handled to ensure the output GIF maintains the same visual appearance as the original video.
+
+- **Forcing a specific aspect ratio**: Using the `--aspect` parameter allows you to create GIFs with specific aspect ratios like square (1:1) or widescreen (16:9), regardless of the source video's dimensions.
+
 ## Notes
 
 - **Paths with spaces:**  

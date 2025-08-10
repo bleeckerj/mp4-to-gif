@@ -14,6 +14,37 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input file does not exist: {input_path}")
     
+    # Get video info using ffprobe
+    probe_cmd = [
+        "ffprobe", "-v", "error", 
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height,sample_aspect_ratio,display_aspect_ratio", 
+        "-of", "csv=p=0", 
+        input_path
+    ]
+    
+    try:
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
+        video_info = probe_result.stdout.strip().split(',')
+        print(f"Video info (width,height,SAR,DAR): {video_info}")
+        
+        # If the file has conflicting metadata, force square output
+        if len(video_info) >= 4:
+            try:
+                width = int(video_info[0])
+                height = int(video_info[1])
+                
+                # If OS reports as square but dimensions aren't square, force square output
+                force_square = (width != height) and (video_info[3] == "1:1")
+                if force_square and not aspect:
+                    print("Video appears square but has rectangular dimensions. Forcing square output.")
+                    aspect = "1:1"
+            except (ValueError, IndexError):
+                pass
+            
+    except subprocess.CalledProcessError:
+        print("Could not determine video dimensions")
+    
     # Determine output filename if not specified
     if output_path is None:
         base, _ = os.path.splitext(input_path)
@@ -25,21 +56,29 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
     
     filters = []
     
-    # Add aspect ratio crop if specified
+    # Handle aspect ratio transformation
     if aspect:
         w_ratio, h_ratio = parse_aspect(aspect)
-        # Center crop to desired aspect ratio
-        filters.append(f"crop='if(gt(a,{w_ratio}/{h_ratio}),ih*{w_ratio}/{h_ratio},iw)':'if(gt(a,{w_ratio}/{h_ratio}),ih,iw*{h_ratio}/{w_ratio})'")
+        
+        # For square aspect (1:1), transform directly to square pixels
+        if w_ratio == h_ratio:
+            # Make a perfect square by taking the minimum dimension
+            filters.append(f"scale='min(iw,ih)':'min(iw,ih)'")
+        else:
+            # Center crop to desired aspect ratio
+            filters.append(
+                f"crop='if(gt(a,{w_ratio}/{h_ratio}),ih*{w_ratio}/{h_ratio},iw)':'if(gt(a,{w_ratio}/{h_ratio}),ih,iw*{h_ratio}/{w_ratio})'"
+            )
     
-    # Add resizing if needed
+    # Add resizing if needed (after any aspect ratio adjustments)
     if resize_factor != 1.0:
         filters.append(f"scale=iw*{resize_factor}:ih*{resize_factor}")
     
-    # Add fps filter
+    # Always add fps filter
     filters.append(f"fps={fps}")
     
-    # Combine filters
-    filter_string = ",".join(filters)
+    # Ensure square pixels in output
+    filters.append("setsar=1")
     
     # Build FFmpeg command
     cmd = ["ffmpeg", "-y"]  # -y to overwrite output files
@@ -59,9 +98,9 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
         else:
             cmd.extend(["-to", str(end_time)])
     
-    # Add filters
-    if filters:
-        cmd.extend(["-vf", filter_string])
+    # Add filter chain
+    filter_string = ",".join(filters)
+    cmd.extend(["-vf", filter_string])
     
     # Output options and file
     cmd.append(output_path)
