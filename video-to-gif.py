@@ -35,12 +35,23 @@ def parse_resize(resize_str):
     except ValueError:
         raise ValueError("Resize must be a scale factor (e.g., 0.5) or pixel dimension (e.g., 800)")
 
-def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, resize_param="1.0", fps=10, aspect=None, crop_in=False, contrast=1.0, saturation=1.0):
+def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, resize_param="1.0", fps=10, aspect=None, crop_in=False, contrast=1.0, saturation=1.0, no_loop=False, webp=False, rename=False, explicit_args=None, loop=None):
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input file does not exist: {input_path}")
     
     # Parse resize parameter
     scale_factor, max_dimension = parse_resize(resize_param)
+    
+    # Infer output format
+    fmt = "gif"
+    if output_path:
+        ext = os.path.splitext(output_path)[1].lower()
+        if ext == ".webp":
+            fmt = "webp"
+    if webp:
+        fmt = "webp"
+        if output_path and not output_path.lower().endswith(".webp"):
+            output_path = os.path.splitext(output_path)[0] + ".webp"
     
     # Get video info using ffprobe
     probe_cmd = [
@@ -75,15 +86,35 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
         print("Could not determine video dimensions")
     
     # Determine output filename if not specified
-    if output_path is None:
-        base, _ = os.path.splitext(input_path)
-        
+    if rename:
+        base, _ = os.path.splitext(os.path.basename(input_path))
+        parts = []
+        if explicit_args.get("resize"):
+            if scale_factor:
+                resize_pct = int(scale_factor * 100)
+                parts.append(f"{resize_pct}pct")
+            elif max_dimension:
+                parts.append(f"{max_dimension}px")
+        if explicit_args.get("fps"):
+            parts.append(f"{fps}fps")
+        if explicit_args.get("aspect"):
+            aspect_str = aspect.replace(":", "x")
+            parts.append(f"{aspect_str}")
+        if explicit_args.get("crop_in"):
+            parts.append("cropped")
+        if explicit_args.get("contrast") and contrast != 1.0:
+            parts.append(f"c{contrast:.1f}".replace(".", ""))
+        if explicit_args.get("saturation") and saturation != 1.0:
+            parts.append(f"s{saturation:.1f}".replace(".", ""))
+        output_path = f"{'_'.join([base] + parts)}.{fmt}"
+    elif output_path is None:
+        # Default output filename logic
+        base, _ = os.path.splitext(os.path.basename(input_path))
         if scale_factor:
             resize_pct = int(scale_factor * 100)
             size_str = f"{resize_pct}pct"
         else:
             size_str = f"{max_dimension}px"
-            
         output_path = f"{base}_{size_str}_{fps}fps"
         if aspect:
             aspect_str = aspect.replace(":", "x")
@@ -94,7 +125,8 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
             output_path += f"_c{contrast:.1f}".replace(".", "")
         if saturation != 1.0:
             output_path += f"_s{saturation:.1f}".replace(".", "")
-        output_path += ".gif"
+        output_path += f".{fmt}"
+    # If output_path is provided, use it exactly as given
     
     filters = []
     
@@ -155,36 +187,39 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
     filters.append("setsar=1")
     
     # Build FFmpeg command
-    cmd = ["ffmpeg", "-y"]  # -y to overwrite output files
-    
-    # Add start time if specified
+    cmd = ["ffmpeg", "-y"]
     if start_time is not None:
         cmd.extend(["-ss", str(start_time)])
-    
-    # Add input file
     cmd.extend(["-i", input_path])
-    
-    # Add end time/duration if specified
     if end_time is not None:
         if start_time is not None:
             duration = end_time - start_time
             cmd.extend(["-t", str(duration)])
         else:
             cmd.extend(["-to", str(end_time)])
-    
-    # Add filter chain
     filter_string = ",".join(filters)
     cmd.extend(["-vf", filter_string])
-    
-    # Output options and file
-    cmd.append(output_path)
-    
+    # Format-specific options
+    if fmt == "gif":
+        if no_loop:
+            print("Note: No-loop functionality may not work reliably with all FFmpeg versions")
+            print("GIF will likely still loop infinitely due to FFmpeg limitations")
+        cmd.append(output_path)
+    elif fmt == "webp":
+        # WebP: -loop 0 = infinite loop, -loop 1 = play once, -loop N = N loops
+        if loop is not None:
+            cmd.extend(["-loop", str(loop)])
+        else:
+            cmd.extend(["-loop", "0"])  # Default: infinite loop for WebP
+        cmd.extend(["-an", "-f", "webp"])
+        cmd.append(output_path)
+    else:
+        cmd.append(output_path)
     print(f"Running command: {' '.join(cmd)}")
-    
     # Run the command
     try:
         result = subprocess.run(cmd, check=True, stderr=subprocess.PIPE, text=True)
-        print(f"GIF saved to: {output_path}")
+        print(f"{fmt.upper()} saved to: {output_path}")
         return True
     except subprocess.CalledProcessError as e:
         print(f"Error converting video: {e.stderr}")
@@ -193,26 +228,31 @@ def mp4_to_gif(input_path, output_path=None, start_time=None, end_time=None, res
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Convert MP4 to animated GIF")
+    parser = argparse.ArgumentParser(description="Convert MP4 to animated GIF or WebP")
     parser.add_argument("input", help="Path to input MP4 file")
-    parser.add_argument("--output", help="Path to output GIF file")
+    parser.add_argument("--output", help="Path to output GIF or WebP file")
     parser.add_argument("--start", type=float, help="Start time in seconds")
     parser.add_argument("--end", type=float, help="End time in seconds")
     parser.add_argument("--resize", default="1.0", help="Resize factor (e.g. 0.5 for 50%%) or pixel dimension (e.g. 800 for 800px max)")
-    parser.add_argument("--fps", type=int, default=10, help="Frames per second for the GIF")
-    
-    # Add both --aspect and --ar as options for aspect ratio
+    parser.add_argument("--fps", type=int, default=10, help="Frames per second for the output animation")
     aspect_group = parser.add_mutually_exclusive_group()
     aspect_group.add_argument("--aspect", help="Target aspect ratio (e.g., 1:1, 16:9, 4:3)")
     aspect_group.add_argument("--ar", help="Target aspect ratio (e.g., 1:1, 16:9, 4:3) - alias for --aspect")
-    
     parser.add_argument("--crop-in", action="store_true", help="Crop to target aspect ratio instead of stretching (preserves pixel aspect ratio)")
     parser.add_argument("--contrast", type=float, default=1.0, help="Contrast adjustment (1.0 = normal, >1.0 = more contrast, <1.0 = less contrast)")
     parser.add_argument("--saturation", type=float, default=1.0, help="Saturation adjustment (1.0 = normal, >1.0 = more saturated, <1.0 = less saturated)")
+    parser.add_argument("--no-loop", action="store_true", help="Attempt to disable animation looping (see README for limitations)")
+    parser.add_argument("--webp", action="store_true", help="Force output as animated WebP regardless of output filename extension")
+    parser.add_argument("--rename", action="store_true", help="Rename output file to reflect explicit arguments")
+    parser.add_argument("--loop", nargs="?", type=int, const=1, help="Set WebP loop count: 1=infinite (default if flag present), 0=play once")
 
     args = parser.parse_args()
-
-    # Use --ar if --aspect is not provided
     aspect_ratio = args.aspect or args.ar
-
-    mp4_to_gif(args.input, args.output, args.start, args.end, args.resize, args.fps, aspect_ratio, args.crop_in, args.contrast, args.saturation)
+    # Track which arguments were explicitly set
+    explicit_args = {"resize": "--resize" in sys.argv,
+                     "fps": "--fps" in sys.argv,
+                     "aspect": "--aspect" in sys.argv or "--ar" in sys.argv,
+                     "crop_in": "--crop-in" in sys.argv,
+                     "contrast": "--contrast" in sys.argv,
+                     "saturation": "--saturation" in sys.argv}
+    mp4_to_gif(args.input, args.output, args.start, args.end, args.resize, args.fps, aspect_ratio, args.crop_in, args.contrast, args.saturation, args.no_loop, args.webp, args.rename, explicit_args, args.loop)
